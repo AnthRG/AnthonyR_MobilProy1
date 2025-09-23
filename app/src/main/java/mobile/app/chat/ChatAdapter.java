@@ -1,30 +1,39 @@
 package mobile.app.chat;
 
 import android.content.Context;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.cardview.widget.CardView;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 
-import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 import mobile.app.R;
 
-public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.VH> {
+public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.MessageViewHolder> {
 
     private List<Message> messages = new ArrayList<>();
-    private Context ctx;
+    private Context context;
+    private String currentUserId;
+    private SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
-    public ChatAdapter(Context ctx) { this.ctx = ctx; }
+    public ChatAdapter(Context context, String currentUserId) {
+        this.context = context;
+        this.currentUserId = currentUserId;
+    }
 
     public void setMessages(List<Message> messages) {
         this.messages = messages;
@@ -33,43 +42,84 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.VH> {
 
     @NonNull
     @Override
-    public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_message, parent, false);
-        return new VH(v);
+    public MessageViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_message_whatsapp, parent, false);
+        return new MessageViewHolder(view);
     }
 
     @Override
-    public void onBindViewHolder(@NonNull VH holder, int position) {
-        Message m = messages.get(position);
-        holder.sender.setText(m.getSenderEmail() != null ? m.getSenderEmail() : "Anon");
-        if (m.getText() != null) {
-            holder.text.setVisibility(View.VISIBLE);
-            holder.text.setText(m.getText());
+    public void onBindViewHolder(@NonNull MessageViewHolder holder, int position) {
+        Message message = messages.get(position);
+        boolean isCurrentUser = message.getSenderId().equals(currentUserId);
+        
+        // Set message alignment
+        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) holder.messageCard.getLayoutParams();
+        if (isCurrentUser) {
+            params.gravity = Gravity.END;
+            params.setMargins(100, 8, 16, 8);
+            holder.messageCard.setCardBackgroundColor(context.getColor(R.color.message_sent_bg));
         } else {
-            holder.text.setVisibility(View.GONE);
+            params.gravity = Gravity.START;
+            params.setMargins(16, 8, 100, 8);
+            holder.messageCard.setCardBackgroundColor(context.getColor(R.color.message_received_bg));
         }
-        if (m.getImageUrl() != null) {
-            holder.image.setVisibility(View.VISIBLE);
-            Glide.with(ctx).load(m.getImageUrl()).into(holder.image);
+        holder.messageCard.setLayoutParams(params);
+        
+        // Set message content
+        if (message.getText() != null) {
+            holder.messageText.setVisibility(View.VISIBLE);
+            holder.messageText.setText(message.getText());
+            holder.messageImage.setVisibility(View.GONE);
+        } else if (message.getImageUrl() != null) {
+            holder.messageImage.setVisibility(View.VISIBLE);
+            Glide.with(context)
+                    .load(message.getImageUrl())
+                    .placeholder(R.drawable.ic_image_placeholder)
+                    .into(holder.messageImage);
+            holder.messageText.setVisibility(View.GONE);
+        }
+        
+        // Set time
+        Date timestamp = message.getTimestamp();
+        if (timestamp != null) {
+            holder.messageTime.setText(timeFormat.format(timestamp));
+        }
+        
+        // Show read status for sent messages
+        if (isCurrentUser) {
+            holder.readStatus.setVisibility(View.VISIBLE);
+            if (message.isRead()) {
+                holder.readStatus.setText("✓✓");
+                holder.readStatus.setTextColor(context.getColor(R.color.read_blue));
+            } else {
+                holder.readStatus.setText("✓");
+                holder.readStatus.setTextColor(context.getColor(R.color.sent_grey));
+            }
         } else {
-            holder.image.setVisibility(View.GONE);
+            holder.readStatus.setVisibility(View.GONE);
         }
-        Date d = m.getTimestamp();
-        holder.time.setText(d != null ? DateFormat.getDateTimeInstance().format(d) : "");
     }
 
     @Override
-    public int getItemCount() { return messages.size(); }
+    public int getItemCount() {
+        return messages.size();
+    }
 
-    static class VH extends RecyclerView.ViewHolder {
-        TextView sender, text, time;
-        ImageView image;
-        VH(@NonNull View itemView) {
+    static class MessageViewHolder extends RecyclerView.ViewHolder {
+        CardView messageCard;
+        TextView messageText;
+        ImageView messageImage;
+        TextView messageTime;
+        TextView readStatus;
+
+        MessageViewHolder(@NonNull View itemView) {
             super(itemView);
-            sender = itemView.findViewById(R.id.msg_sender);
-            text = itemView.findViewById(R.id.msg_text);
-            time = itemView.findViewById(R.id.msg_time);
-            image = itemView.findViewById(R.id.msg_image);
+            messageCard = itemView.findViewById(R.id.message_card);
+            messageText = itemView.findViewById(R.id.message_text);
+            messageImage = itemView.findViewById(R.id.message_image);
+            messageTime = itemView.findViewById(R.id.message_time);
+            readStatus = itemView.findViewById(R.id.read_status);
         }
     }
 }

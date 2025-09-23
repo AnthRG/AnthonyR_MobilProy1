@@ -9,6 +9,7 @@ public class Message {
     private String senderEmail;
     private String text;
     private String imageUrl;
+    private boolean read;
     @ServerTimestamp
     private Date timestamp;
 
@@ -19,10 +20,12 @@ public class Message {
     public String getText() { return text; }
     public String getImageUrl() { return imageUrl; }
     public Date getTimestamp() { return timestamp; }
+    public boolean isRead() { return read; }
 
     public void setSenderId(String senderId) { this.senderId = senderId; }
     public void setSenderEmail(String senderEmail) { this.senderEmail = senderEmail; }
     public void setText(String text) { this.text = text; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public void setTimestamp(Date timestamp) { this.timestamp = timestamp; }
+    public void setRead(boolean read) { this.read = read; }
 }

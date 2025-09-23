@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
+            android:name=".WhatsAppApplication"
             android:allowBackup="true"
             android:dataExtractionRules="@xml/data_extraction_rules"
             android:fullBackupContent="@xml/backup_rules"
@@ -26,6 +27,7 @@
         <activity android:name=".auth.LoginActivity" />
         <activity android:name=".auth.RegisterActivity" />
         <activity android:name=".chat.ChatActivity" />
+        <activity android:name=".chat.AddContactActivity" />
 
         <service
             android:name=".fcm.MyFirebaseMessagingService"
