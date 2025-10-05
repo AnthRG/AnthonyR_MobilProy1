@@ -79,7 +79,8 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
         
         fab.setOnClickListener(v -> {
-            startActivity(new Intent(MainActivity.this, AddContactActivity.class));
+            Intent intent = new Intent(MainActivity.this, mobile.app.chat.SelectContactActivity.class);
+            startActivity(intent);
         });
         
         loadChats();
@@ -141,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
                                         // Find contact name for this email
                                         for (QueryDocumentSnapshot contactDoc : contactSnapshots) {
                                             Contact contact = contactDoc.toObject(Contact.class);
-                                            if (contact.getEmail().equals(otherEmail)) {
+                                            if (contact.getEmail() != null && contact.getEmail().equals(otherEmail)) {
                                                 chat.setContactName(contact.getNickname());
                                                 break;
                                             }

@@ -19,6 +19,8 @@ public class Chat {
 
     public Chat() {}
 
+
+
     public String getChatId() { return chatId; }
     public void setChatId(String chatId) { this.chatId = chatId; }
 

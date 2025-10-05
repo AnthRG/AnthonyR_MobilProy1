@@ -26,6 +26,7 @@ import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 
+import java.io.InputStream;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -166,7 +167,6 @@ public class ChatActivity extends AppCompatActivity {
         // Create message
         Map<String, Object> message = new HashMap<>();
         message.put("senderId", currentUser.getUid());
-        message.put("senderEmail", currentUser.getEmail());
         message.put("text", text);
         message.put("timestamp", new Date());
         message.put("read", false);
@@ -212,14 +212,41 @@ public class ChatActivity extends AppCompatActivity {
         if (currentUser == null) return;
         progressBar.setVisibility(View.VISIBLE);
         
-        StorageReference fileRef = storageRef.child(chatId).child(System.currentTimeMillis() + "_img");
-        UploadTask uploadTask = fileRef.putFile(imageUri);
-        
-        uploadTask.addOnSuccessListener(taskSnapshot -> fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
+        try {
+            // Convert image to Base64
+            InputStream inputStream = getContentResolver().openInputStream(imageUri);
+            if (inputStream == null) {
+                progressBar.setVisibility(View.GONE);
+                return;
+            }
+            
+            // Compress and convert to bitmap
+            android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeStream(inputStream);
+            inputStream.close();
+            
+            // Resize bitmap to reduce size (max width/height 800px)
+            int maxDimension = 800;
+            int width = bitmap.getWidth();
+            int height = bitmap.getHeight();
+            float scale = Math.min(((float) maxDimension / width), ((float) maxDimension / height));
+            
+            if (scale < 1) {
+                int newWidth = Math.round(width * scale);
+                int newHeight = Math.round(height * scale);
+                bitmap = android.graphics.Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true);
+            }
+            
+            // Convert to Base64
+            java.io.ByteArrayOutputStream byteArrayOutputStream = new java.io.ByteArrayOutputStream();
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, byteArrayOutputStream);
+            byte[] byteArray = byteArrayOutputStream.toByteArray();
+            String base64Image = android.util.Base64.encodeToString(byteArray, android.util.Base64.DEFAULT);
+            
+            // Create message with Base64 image
             Map<String, Object> message = new HashMap<>();
             message.put("senderId", currentUser.getUid());
             message.put("senderEmail", currentUser.getEmail());
-            message.put("imageUrl", uri.toString());
+            message.put("imageBase64", base64Image);
             message.put("timestamp", new Date());
             message.put("read", false);
             
@@ -229,8 +256,17 @@ public class ChatActivity extends AppCompatActivity {
                 .addOnSuccessListener(documentReference -> {
                     updateLastMessage("📷 Photo");
                     progressBar.setVisibility(View.GONE);
+                })
+                .addOnFailureListener(e -> {
+                    progressBar.setVisibility(View.GONE);
+                    android.widget.Toast.makeText(this, "Failed to send image", android.widget.Toast.LENGTH_SHORT).show();
                 });
-        })).addOnFailureListener(e -> progressBar.setVisibility(View.GONE));
+                
+        } catch (Exception e) {
+            e.printStackTrace();
+            progressBar.setVisibility(View.GONE);
+            android.widget.Toast.makeText(this, "Error processing image", android.widget.Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override

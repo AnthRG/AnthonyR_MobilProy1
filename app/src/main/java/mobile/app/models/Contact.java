@@ -34,4 +34,6 @@ public class Contact {
 
     public Date getAddedAt() { return addedAt; }
     public void setAddedAt(Date addedAt) { this.addedAt = addedAt; }
+
+
 }

@@ -37,6 +37,16 @@ public class RegisterActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Check if user is already logged in
+        mAuth = FirebaseAuth.getInstance();
+        if (mAuth.getCurrentUser() != null) {
+            Log.d(TAG, "User already logged in, redirecting to MainActivity");
+            startActivity(new Intent(this, MainActivity.class));
+            finish();
+            return;
+        }
+        
         setContentView(R.layout.activity_register);
 
         emailField = findViewById(R.id.email);
@@ -46,8 +56,12 @@ public class RegisterActivity extends AppCompatActivity {
         goLoginButton = findViewById(R.id.btn_go_login);
         progressBar = findViewById(R.id.progress);
 
-        mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
+
+        goLoginButton.setOnClickListener(v -> {
+            startActivity(new Intent(RegisterActivity.this, LoginActivity.class));
+            finish();
+        });
 
         registerButton.setOnClickListener(v -> {
             String email = emailField.getText().toString().trim();
@@ -62,52 +76,64 @@ public class RegisterActivity extends AppCompatActivity {
                 Toast.makeText(RegisterActivity.this, "Password must be at least 6 characters", Toast.LENGTH_SHORT).show();
                 return;
             }
+
             progressBar.setVisibility(View.VISIBLE);
-            Log.d(TAG, "Attempting to register user with email: " + email);
-            
+            registerButton.setEnabled(false);
+            goLoginButton.setEnabled(false);
+
             mAuth.createUserWithEmailAndPassword(email, password)
-                    .addOnCompleteListener(task -> {
+                    .addOnCompleteListener(this, task -> {
                         if (task.isSuccessful()) {
-                            FirebaseUser user = mAuth.getCurrentUser();
-                            Log.d(TAG, "Registration successful, user ID: " + user.getUid());
-                            
-                            // Create user document in Firestore
-                            Map<String, Object> userData = new HashMap<>();
-                            userData.put("uid", user.getUid());
-                            userData.put("email", email.toLowerCase()); // Store email in lowercase
-                            userData.put("displayName", name.isEmpty() ? email.split("@")[0] : name);
-                            userData.put("status", "Hey there! I am using WhatsApp");
-                            userData.put("online", true);
-                            
-                            Log.d(TAG, "Creating user document with email: " + email.toLowerCase());
-                            
-                            db.collection("users").document(user.getUid())
-                                .set(userData)
-                                .addOnSuccessListener(aVoid -> {
-                                    Log.d(TAG, "User document created successfully");
-                                    // Register FCM token
-                                    mobile.app.fcm.FCMTokenManager.registerTokenToFirestore();
-                                    progressBar.setVisibility(View.GONE);
-                                    Intent intent = new Intent(RegisterActivity.this, MainActivity.class);
-                                    startActivity(intent);
-                                    finish();
-                                })
-                                .addOnFailureListener(e -> {
-                                    progressBar.setVisibility(View.GONE);
-                                    Toast.makeText(RegisterActivity.this, "Failed to create user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                                    Log.e(TAG, "Failed to create user document", e);
-                                });
+                            FirebaseUser firebaseUser = mAuth.getCurrentUser();
+                            if (firebaseUser != null) {
+                                // Create user document in Firestore
+                                Map<String, Object> userData = new HashMap<>();
+                                userData.put("uid", firebaseUser.getUid());
+                                userData.put("email", email.toLowerCase());
+                                userData.put("displayName", name.isEmpty() ? email.split("@")[0] : name);
+                                userData.put("status", "Hey there! I am using WhatsApp.");
+                                userData.put("online", true);
+
+                                db.collection("users").document(firebaseUser.getUid())
+                                        .set(userData)
+                                        .addOnCompleteListener(dbTask -> {
+                                            if (dbTask.isSuccessful()) {
+                                                Log.d(TAG, "User document created in Firestore.");
+                                                startActivity(new Intent(RegisterActivity.this, MainActivity.class));
+                                                finish();
+                                            } else {
+                                                Log.w(TAG, "Failed to create user document in Firestore.", dbTask.getException());
+                                                Toast.makeText(RegisterActivity.this, "Registration succeeded, but failed to save profile.", Toast.LENGTH_LONG).show();
+                                                // Rollback Auth user creation if Firestore fails
+                                                firebaseUser.delete().addOnCompleteListener(deleteTask -> {
+                                                    if (deleteTask.isSuccessful()) {
+                                                        Log.d(TAG, "Auth user rolled back successfully.");
+                                                    } else {
+                                                        Log.w(TAG, "Failed to roll back Auth user.", deleteTask.getException());
+                                                    }
+                                                });
+                                            }
+                                        });
+                            } else {
+                                // This case is unlikely but good to handle
+                                resetUI("Registration failed: User not found.", null);
+                            }
                         } else {
-                            progressBar.setVisibility(View.GONE);
-                            Toast.makeText(RegisterActivity.this, "Registration failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
-                            Log.e(TAG, "Registration failed", task.getException());
+                            resetUI("Registration failed: " + task.getException().getMessage(), task.getException());
                         }
                     });
         });
+    }
 
-        goLoginButton.setOnClickListener(v -> {
-            startActivity(new Intent(RegisterActivity.this, LoginActivity.class));
-            finish();
-        });
+    private void resetUI(String message, Exception e) {
+        progressBar.setVisibility(View.GONE);
+        registerButton.setEnabled(true);
+        goLoginButton.setEnabled(true);
+        Toast.makeText(RegisterActivity.this, message, Toast.LENGTH_LONG).show();
+        if (e != null) {
+            Log.e(TAG, message, e);
+        } else {
+            Log.e(TAG, message);
+        }
     }
 }

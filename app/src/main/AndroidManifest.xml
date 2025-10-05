@@ -1,7 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           xmlns:tools="http://schemas.android.com/tools">
+    
+    <!-- Required permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"
+        tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    
+    <!-- FCM permissions -->
+    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
             android:name=".WhatsAppApplication"
@@ -13,22 +35,41 @@
             android:roundIcon="@mipmap/ic_launcher_round"
             android:supportsRtl="true"
             android:theme="@style/Theme.MobileFirstProject"
+            android:requestLegacyExternalStorage="true"
             tools:targetApi="31">
         <activity
                 android:name=".MainActivity"
-                android:exported="true">
+                android:exported="true"
+                android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
-
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
 
-        <activity android:name=".auth.LoginActivity" />
-        <activity android:name=".auth.RegisterActivity" />
-        <activity android:name=".chat.ChatActivity" />
-        <activity android:name=".chat.AddContactActivity" />
+        <activity 
+            android:name=".auth.LoginActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity 
+            android:name=".auth.RegisterActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity 
+            android:name=".chat.ChatActivity"
+            android:windowSoftInputMode="adjustResize"
+            android:parentActivityName=".MainActivity" />
+        <activity 
+            android:name=".chat.AddContactActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity 
+            android:name=".chat.UserListActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".chat.SelectContactActivity"
+            android:exported="false"
+            android:label="Select Contact"
+            android:parentActivityName=".MainActivity" />
 
+        <!-- Firebase Messaging Service -->
         <service
             android:name=".fcm.MyFirebaseMessagingService"
             android:exported="false">
@@ -36,6 +77,18 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- WorkManager Configuration Provider -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>

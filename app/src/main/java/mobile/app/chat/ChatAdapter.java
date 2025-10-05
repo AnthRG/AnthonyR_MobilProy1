@@ -71,7 +71,19 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.MessageViewHol
             holder.messageText.setVisibility(View.VISIBLE);
             holder.messageText.setText(message.getText());
             holder.messageImage.setVisibility(View.GONE);
+        } else if (message.getImageBase64() != null) {
+            // Handle Base64 image
+            holder.messageImage.setVisibility(View.VISIBLE);
+            try {
+                byte[] decodedBytes = android.util.Base64.decode(message.getImageBase64(), android.util.Base64.DEFAULT);
+                android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.length);
+                holder.messageImage.setImageBitmap(bitmap);
+            } catch (Exception e) {
+                holder.messageImage.setImageResource(R.drawable.ic_image_placeholder);
+            }
+            holder.messageText.setVisibility(View.GONE);
         } else if (message.getImageUrl() != null) {
+            // Handle URL image (for backward compatibility)
             holder.messageImage.setVisibility(View.VISIBLE);
             Glide.with(context)
                     .load(message.getImageUrl())

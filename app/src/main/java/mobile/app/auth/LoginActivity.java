@@ -1,6 +1,9 @@
 package mobile.app.auth;
 
+import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
@@ -18,6 +21,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.SetOptions;
+import com.google.firebase.firestore.Source;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,6 +43,16 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Check if user is already logged in
+        mAuth = FirebaseAuth.getInstance();
+        if (mAuth.getCurrentUser() != null) {
+            Log.d(TAG, "User already logged in, redirecting to MainActivity");
+            startActivity(new Intent(this, MainActivity.class));
+            finish();
+            return;
+        }
+        
         setContentView(R.layout.activity_login);
 
         emailField = findViewById(R.id.email);
@@ -47,8 +61,12 @@ public class LoginActivity extends AppCompatActivity {
         goRegisterButton = findViewById(R.id.btn_go_register);
         progressBar = findViewById(R.id.progress);
 
-        mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
+
+        goRegisterButton.setOnClickListener(v -> {
+            startActivity(new Intent(LoginActivity.this, RegisterActivity.class));
+            finish();
+        });
 
         loginButton.setOnClickListener(v -> {
             String email = emailField.getText().toString().trim();
@@ -59,69 +77,79 @@ public class LoginActivity extends AppCompatActivity {
                 return;
             }
             
+            if (!isNetworkAvailable()) {
+                Toast.makeText(LoginActivity.this, "No internet connection.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            
             progressBar.setVisibility(View.VISIBLE);
-            Log.d(TAG, "Attempting login with email: " + email);
+            loginButton.setEnabled(false);
+            goRegisterButton.setEnabled(false);
             
             mAuth.signInWithEmailAndPassword(email, password)
-                    .addOnCompleteListener(task -> {
+                    .addOnCompleteListener(this, task -> {
+                        // Always re-enable buttons and hide progress bar in the end
+                        progressBar.setVisibility(View.GONE);
+                        loginButton.setEnabled(true);
+                        goRegisterButton.setEnabled(true);
+
                         if (task.isSuccessful()) {
-                            FirebaseUser user = mAuth.getCurrentUser();
-                            Log.d(TAG, "Login successful for user: " + user.getUid());
-                            
-                            // Always update/create user document to ensure email is stored
-                            Map<String, Object> userData = new HashMap<>();
-                            userData.put("uid", user.getUid());
-                            userData.put("email", email.toLowerCase()); // Store email in lowercase
-                            userData.put("online", true);
-                            
-                            // Check if user document exists to preserve displayName and status
-                            db.collection("users").document(user.getUid()).get()
-                                .addOnSuccessListener(documentSnapshot -> {
-                                    if (!documentSnapshot.exists()) {
-                                        Log.d(TAG, "Creating new user document");
-                                        // New user document
-                                        userData.put("displayName", email.split("@")[0]);
-                                        userData.put("status", "Hey there! I am using WhatsApp");
-                                    } else {
-                                        Log.d(TAG, "Updating existing user document");
-                                        // Preserve existing displayName and status if they exist
-                                        String existingName = documentSnapshot.getString("displayName");
-                                        String existingStatus = documentSnapshot.getString("status");
-                                        if (existingName != null) userData.put("displayName", existingName);
-                                        if (existingStatus != null) userData.put("status", existingStatus);
-                                    }
-                                    
-                                    // Set or update the document
-                                    db.collection("users").document(user.getUid())
-                                        .set(userData, SetOptions.merge())
-                                        .addOnSuccessListener(aVoid -> {
-                                            Log.d(TAG, "User document updated successfully");
-                                            // Register FCM token
-                                            mobile.app.fcm.FCMTokenManager.registerTokenToFirestore();
-                                            progressBar.setVisibility(View.GONE);
-                                            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                                            startActivity(intent);
-                                            finish();
-                                        })
-                                        .addOnFailureListener(e -> {
-                                            progressBar.setVisibility(View.GONE);
-                                            Toast.makeText(LoginActivity.this, "Failed to update user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                                            Log.e(TAG, "Failed to update user document", e);
-                                        });
-                                })
-                                .addOnFailureListener(e -> {
-                                    progressBar.setVisibility(View.GONE);
-                                    Toast.makeText(LoginActivity.this, "Failed to check user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                                    Log.e(TAG, "Failed to check user document", e);
-                                });
+                            Log.d(TAG, "Login successful.");
+                            // Sync user data to Firestore before proceeding
+                            syncUserDocumentOnLogin(task.getResult().getUser());
                         } else {
-                            progressBar.setVisibility(View.GONE);
+                            Log.w(TAG, "Login failed", task.getException());
                             Toast.makeText(LoginActivity.this, "Authentication failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
-                            Log.e(TAG, "Login failed", task.getException());
                         }
                     });
         });
+    }
 
-        goRegisterButton.setOnClickListener(v -> startActivity(new Intent(LoginActivity.this, RegisterActivity.class)));
+    private void syncUserDocumentOnLogin(FirebaseUser user) {
+        if (user == null) return;
+
+        db.collection("users").document(user.getUid()).get()
+            .addOnCompleteListener(task -> {
+                if (task.isSuccessful() && !task.getResult().exists()) {
+                    // User document doesn't exist, create it
+                    Log.d(TAG, "User document not found, creating one for " + user.getEmail());
+                    Map<String, Object> userData = new HashMap<>();
+                    userData.put("uid", user.getUid());
+                    userData.put("email", user.getEmail().toLowerCase());
+                    userData.put("displayName", user.getEmail().split("@")[0]);
+                    userData.put("status", "Hey there! I am using WhatsApp");
+                    userData.put("online", true);
+
+                    db.collection("users").document(user.getUid()).set(userData)
+                        .addOnCompleteListener(setTask -> {
+                            if (setTask.isSuccessful()) {
+                                Log.d(TAG, "User document created on login.");
+                            } else {
+                                Log.w(TAG, "Failed to create user document on login.", setTask.getException());
+                            }
+                            // Proceed whether it fails or not, as auth succeeded
+                            proceedToMainActivity();
+                        });
+                } else if (!task.isSuccessful()) {
+                    Log.w(TAG, "Failed to check for user document.", task.getException());
+                    proceedToMainActivity(); // Proceed anyway
+                } else {
+                    // User document exists, just proceed
+                    Log.d(TAG, "User document already exists.");
+                    proceedToMainActivity();
+                }
+            });
+    }
+
+    private void proceedToMainActivity() {
+        startActivity(new Intent(LoginActivity.this, MainActivity.class));
+        finish();
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connectivityManager == null) return false;
+        NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
     }
 }
