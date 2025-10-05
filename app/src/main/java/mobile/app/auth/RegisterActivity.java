@@ -99,6 +99,8 @@ public class RegisterActivity extends AppCompatActivity {
                                         .addOnCompleteListener(dbTask -> {
                                             if (dbTask.isSuccessful()) {
                                                 Log.d(TAG, "User document created in Firestore.");
+                                                // Register FCM token after successful registration
+                                                mobile.app.fcm.FCMTokenManager.registerTokenToFirestore();
                                                 startActivity(new Intent(RegisterActivity.this, MainActivity.class));
                                                 finish();
                                             } else {

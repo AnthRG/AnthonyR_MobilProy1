@@ -142,6 +142,9 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void proceedToMainActivity() {
+        // Register FCM token after successful login
+        mobile.app.fcm.FCMTokenManager.registerTokenToFirestore();
+        
         startActivity(new Intent(LoginActivity.this, MainActivity.class));
         finish();
     }

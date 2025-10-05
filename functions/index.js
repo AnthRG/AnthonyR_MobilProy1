@@ -1,41 +1,111 @@
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
+const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {initializeApp} = require("firebase-admin/app");
+const {getFirestore} = require("firebase-admin/firestore");
+const {getMessaging} = require("firebase-admin/messaging");
 
-admin.initializeApp();
+initializeApp();
 
-// Trigger when a new message document is created in `messages` collection
-exports.sendNotificationOnNewMessage = functions.firestore
-  .document('messages/{messageId}')
-  .onCreate(async (snap, context) => {
-    const message = snap.data();
-    const senderEmail = message.senderEmail || 'Alguien';
-    const text = message.text || '';
+// Trigger when a new message is created in a chat
+exports.sendNotificationOnNewMessage = onDocumentCreated(
+    "chats/{chatId}/messages/{messageId}",
+    async (event) => {
+      const message = event.data.data();
+      const chatId = event.params.chatId;
+      const senderId = message.senderId;
 
-    // For simplicity: send notification to all stored tokens
-    const tokensSnapshot = await admin.firestore().collection('fcm_tokens').get();
-    const tokens = [];
-    tokensSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data && data.token) tokens.push(data.token);
-    });
+      try {
+        const db = getFirestore();
 
-    if (tokens.length === 0) return null;
+        // Get chat document to find the recipient
+        const chatDoc = await db.collection("chats").doc(chatId).get();
+        if (!chatDoc.exists) {
+          console.log("Chat not found");
+          return null;
+        }
 
-    const payload = {
-      notification: {
-        title: `Nuevo mensaje de ${senderEmail}`,
-        body: text ? text : 'Imagen enviada',
-      },
-      data: {
-        messageId: context.params.messageId
+        const chatData = chatDoc.data();
+        const participants = chatData.participants || [];
+
+        // Find the recipient (not the sender)
+        const recipientId = participants.find((id) => id !== senderId);
+        if (!recipientId) {
+          console.log("No recipient found");
+          return null;
+        }
+
+        // Get recipient's FCM token
+        const recipientDoc = await db.collection("users")
+            .doc(recipientId).get();
+        if (!recipientDoc.exists) {
+          console.log("Recipient user not found");
+          return null;
+        }
+
+        const recipientData = recipientDoc.data();
+        const fcmToken = recipientData.fcmToken;
+
+        if (!fcmToken) {
+          console.log("Recipient has no FCM token");
+          return null;
+        }
+
+        // Check if recipient is online - if so, don't send notification
+        if (recipientData.online === true) {
+          console.log("Recipient is online, skipping notification");
+          return null;
+        }
+
+        // Get sender's info
+        const senderDoc = await db.collection("users").doc(senderId).get();
+        const senderEmail = senderDoc.exists ?
+         senderDoc.data().email : "Alguien";
+        const senderName = senderEmail.split("@")[0];
+
+        // Prepare message body
+        let body = message.text || "";
+        if (message.imageBase64) {
+          body = "📷 Foto";
+        } else if (message.imageUrl) {
+          body = "📷 Foto";
+        }
+
+        // Get contact name if exists
+        let contactName = senderName;
+        const contactsSnapshot = await db
+            .collection("users")
+            .doc(recipientId)
+            .collection("contacts")
+            .where("userId", "==", senderId)
+            .limit(1)
+            .get();
+
+        if (!contactsSnapshot.empty) {
+          const contactData = contactsSnapshot.docs[0].data();
+          contactName = contactData.nickname || senderName;
+        }
+
+        // Send notification
+        const payload = {
+          data: {
+            title: contactName,
+            body: body,
+            chatId: chatId,
+            otherUserId: senderId,
+            otherUserEmail: senderEmail,
+            contactName: contactName,
+          },
+        };
+
+        const response = await getMessaging().send({
+          token: fcmToken,
+          data: payload.data,
+        });
+        console.log("Notification sent successfully:", response);
+
+        return null;
+      } catch (error) {
+        console.error("Error sending notification:", error);
+        return null;
       }
-    };
-
-    try {
-      const response = await admin.messaging().sendToDevice(tokens, payload);
-      console.log('Notifications sent:', response.successCount);
-    } catch (err) {
-      console.error('Error sending notifications', err);
-    }
-    return null;
-  });
+    },
+);

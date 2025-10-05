@@ -22,15 +22,38 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
         super.onMessageReceived(message);
-        String title = message.getNotification() != null ? message.getNotification().getTitle() : "Nuevo mensaje";
-        String body = message.getNotification() != null ? message.getNotification().getBody() : "Tienes un nuevo mensaje";
-        sendNotification(title, body);
+        
+        // Get data from message
+        String title = message.getData().get("title");
+        String body = message.getData().get("body");
+        String chatId = message.getData().get("chatId");
+        String otherUserId = message.getData().get("otherUserId");
+        String otherUserEmail = message.getData().get("otherUserEmail");
+        String contactName = message.getData().get("contactName");
+        
+        if (title == null) title = "Nuevo mensaje";
+        if (body == null) body = "Tienes un nuevo mensaje";
+        
+        sendNotification(title, body, chatId, otherUserId, otherUserEmail, contactName);
     }
 
-    private void sendNotification(String title, String messageBody) {
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+    private void sendNotification(String title, String messageBody, String chatId, String otherUserId, String otherUserEmail, String contactName) {
+        Intent intent;
+        
+        // If we have chat details, open the chat directly
+        if (chatId != null && otherUserId != null) {
+            intent = new Intent(this, mobile.app.chat.ChatActivity.class);
+            intent.putExtra("chatId", chatId);
+            intent.putExtra("otherUserId", otherUserId);
+            intent.putExtra("otherUserEmail", otherUserEmail);
+            intent.putExtra("contactName", contactName);
+        } else {
+            // Otherwise open main activity
+            intent = new Intent(this, MainActivity.class);
+        }
+        
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
         String channelId = "chat_messages";
         Uri defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);

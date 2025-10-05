@@ -25,12 +25,11 @@ public class FCMTokenManager {
             if (uid == null) return;
 
             Map<String, Object> data = new HashMap<>();
-            data.put("token", token);
-            data.put("updatedAt", com.google.firebase.firestore.FieldValue.serverTimestamp());
+            data.put("fcmToken", token);
 
-            FirebaseFirestore.getInstance().collection("fcm_tokens").document(uid).set(data)
-                    .addOnSuccessListener(aVoid -> Log.d(TAG, "Token saved to Firestore"))
-                    .addOnFailureListener(e -> Log.w(TAG, "Token save failed", e));
+            FirebaseFirestore.getInstance().collection("users").document(uid).update(data)
+                    .addOnSuccessListener(aVoid -> Log.d(TAG, "FCM Token saved to user document"))
+                    .addOnFailureListener(e -> Log.w(TAG, "FCM Token save failed", e));
         });
     }
 }

@@ -21,6 +21,7 @@ import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import mobile.app.auth.LoginActivity;
@@ -87,6 +88,14 @@ public class MainActivity extends AppCompatActivity {
         
         // Register FCM token
         mobile.app.fcm.FCMTokenManager.registerTokenToFirestore();
+        
+        // Request notification permission for Android 13+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) 
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1);
+            }
+        }
     }
     
     @Override
@@ -99,10 +108,23 @@ public class MainActivity extends AppCompatActivity {
             finish();
             return;
         }
-        loadChats();
+        
+        // Set user as online
+        db.collection("users").document(currentUser.getUid())
+            .update("online", true)
+            .addOnFailureListener(e -> android.util.Log.e("MainActivity", "Failed to set online status", e));
     }
     
-    private void loadChats() {
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Set user as offline when app goes to background
+        if (currentUser != null) {
+            db.collection("users").document(currentUser.getUid())
+                .update("online", false, "lastSeen", new Date())
+                .addOnFailureListener(e -> android.util.Log.e("MainActivity", "Failed to set offline status", e));
+        }
+    }    private void loadChats() {
         if (currentUser == null) return;
         
         String userId = currentUser.getUid();
