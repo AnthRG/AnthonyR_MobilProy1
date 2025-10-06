@@ -20,6 +20,12 @@ import mobile.app.R;
 public class MyFirebaseMessagingService extends FirebaseMessagingService {
 
     @Override
+    public void onNewToken(@NonNull String token) {
+        super.onNewToken(token);
+        FCMTokenManager.saveTokenToFirestore(token);
+    }
+
+    @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
         super.onMessageReceived(message);
         
@@ -30,6 +36,15 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         String otherUserId = message.getData().get("otherUserId");
         String otherUserEmail = message.getData().get("otherUserEmail");
         String contactName = message.getData().get("contactName");
+
+        if (message.getNotification() != null) {
+            if (title == null) {
+                title = message.getNotification().getTitle();
+            }
+            if (body == null) {
+                body = message.getNotification().getBody();
+            }
+        }
         
         if (title == null) title = "Nuevo mensaje";
         if (body == null) body = "Tienes un nuevo mensaje";
@@ -53,7 +68,12 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         }
         
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+                this,
+                chatId != null ? chatId.hashCode() : messageBody.hashCode(),
+                intent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        );
 
         String channelId = "chat_messages";
         Uri defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
@@ -63,15 +83,24 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 .setContentText(messageBody)
                 .setAutoCancel(true)
                 .setSound(defaultSoundUri)
-                .setContentIntent(pendingIntent);
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setContentIntent(pendingIntent)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(messageBody));
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 
+        if (notificationManager == null) {
+            return;
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "Chat messages", NotificationManager.IMPORTANCE_DEFAULT);
+            NotificationChannel channel = new NotificationChannel(channelId, "Chat messages", NotificationManager.IMPORTANCE_HIGH);
             notificationManager.createNotificationChannel(channel);
         }
 
-        notificationManager.notify(0, notificationBuilder.build());
+        notificationManager.notify((chatId != null ? chatId : String.valueOf(System.currentTimeMillis())).hashCode(), notificationBuilder.build());
     }
 }

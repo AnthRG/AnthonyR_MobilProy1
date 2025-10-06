@@ -129,12 +129,10 @@ public class MainActivity extends AppCompatActivity {
         
         String userId = currentUser.getUid();
         
-        // First load user's contacts
         db.collection("users").document(userId)
             .collection("contacts")
             .get()
             .addOnSuccessListener(contactSnapshots -> {
-                // Then load chats
                 db.collection("chats")
                     .whereArrayContains("participants", userId)
                     .orderBy("lastMessageTime", Query.Direction.DESCENDING)

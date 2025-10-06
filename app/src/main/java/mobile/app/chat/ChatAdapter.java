@@ -83,7 +83,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.MessageViewHol
             }
             holder.messageText.setVisibility(View.GONE);
         } else if (message.getImageUrl() != null) {
-            // Handle URL image (for backward compatibility)
+            // Handle URL image 
             holder.messageImage.setVisibility(View.VISIBLE);
             Glide.with(context)
                     .load(message.getImageUrl())
