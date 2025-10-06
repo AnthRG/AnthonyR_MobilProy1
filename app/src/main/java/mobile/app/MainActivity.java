@@ -59,7 +59,7 @@ public class MainActivity extends AppCompatActivity {
         
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        getSupportActionBar().setTitle("WhatsApp");
+        getSupportActionBar().setTitle("NotWApp");
         
         recyclerView = findViewById(R.id.recycler_chats);
         emptyView = findViewById(R.id.empty_view);
